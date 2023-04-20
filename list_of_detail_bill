@@ -1,0 +1,322 @@
+SELECT 'INVOICE' AS 'DOC TYPE', 
+billheader.BHDT AS 'DOC DATE & TIME', 
+billheader.BHCANCELBT AS 'DOC CANCELLED DATE & TIME', 
+billheader.BHNO AS 'DOC NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billheader.BHPDOCNAME AS 'PRIMARY DOCTOR', 
+billheader.BHPRN AS 'MRN', 
+FIRSTREG.RDATETIME AS 'FIRST VISIT DATE & TIME', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+patient.PIC AS 'PATIENT IC NO', 
+patient.PGENREMARK AS 'PATIENT REMARKS', 
+registration.RREMARK AS 'REGISTRATION REMARKS', 
+billdetail.BDISBCATEGORY AS 'BILLING CATEGORY CODE', 
+billdetail.BDISBCATEGORYDESC AS 'BILLING CATEGORY', 
+billdetail.BDDEPTNAME AS 'ORDER DEPT', 
+billdetail.BDDOCNAME AS 'ORDER DOCTOR', 
+auconspec.ACSDESC AS 'ORDER DOC SPECIALTY', 
+billdetail.BDISCODE AS 'ITEM CODE', 
+billdetail.BDISDESC AS 'ITEM DESCRIPTION', 
+billdetail.BDPREFORMDT AS 'ORDER DATE', 
+billdetail.BDAMT AS 'GROSS PRICE', 
+billdetail.BDDISCOUNTAMT AS 'DISCOUNT AMOUNT', 
+billdetail.BDQTY AS 'QUANTITY', 
+billdetail.BDTOTAL AS 'TOTAL AMOUNT', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) AS 'UNIT COST', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) * billdetail.BDQTY AS 'TOTAL COST', 
+(CASE WHEN istock.ISCATCODE is not null THEN istock.ISCATCODE ELSE iservices.ISCATCODE END) AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESC', 
+icat.ICOUTPNLACCODE AS 'POSTING ACCOUNT', 
+fisaccountcode.FISACCDESC AS 'POSTING ACCOUNT DESC', 
+billdetail.BDPLACEUNAME AS 'ORDER BY', 
+cmethod.CMDESC AS 'CHARGE METHOD', 
+COMPREFERRALTYPE.CPTDESC AS 'RERFERRAL TYPE', 
+COMPREFERRALSUBTYPE.CPSTDESC AS 'REFERRAL SUBTYPE', 
+COMPREFERRAL.NAME AS 'REFERRAL TYPE'
+FROM billdetail WITH (NOLOCK)
+outer apply (
+	SELECT TOP 1 * FROM hiservices WITH (NOLOCK)
+	WHERE hiservices.HSCODE = billdetail.BDISCODE
+	AND hiservices.HSUPDATEDT < billdetail.BDPREFORMDT
+	order by hiservices.HSUPDATEDT) as SERVCOST
+OUTER APPLY (
+	SELECT TOP 1 RRN, RDATETIME FROM registration WITH (NOLOCK)
+	LEFT JOIN billheader ON billheader.BHPRN = registration.RRN
+	WHERE billdetail.BHID = billheader.BHID AND
+	RFIRSTVISIT = '1' and RCANCELREGCODE is null
+	ORDER BY RDATETIME) AS FIRSTREG
+left join istock WITH (NOLOCK) on istock.ISCODE = billdetail.BDISCODE
+left join iservices WITH (NOLOCK) on iservices.ISCODE = billdetail.BDISCODE
+left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = iservices.ISCATCODE
+--left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
+--left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
+left join billheader WITH (NOLOCK) on billdetail.BHID = billheader.BHID
+left join registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
+left join patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
+left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
+left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
+left join COMPREFERRAL WITH (NOLOCK) on registration.RREFSOURCECODE = COMPREFERRAL.CODE
+left join COMPREFERRALSUBTYPE WITH (NOLOCK) ON COMPREFERRAL.CPSTID = COMPREFERRALSUBTYPE.CPSTID
+left join COMPREFERRALTYPE WITH (NOLOCK) ON COMPREFERRALSUBTYPE.CPTID = COMPREFERRALTYPE.CPTID
+left join fisaccountcode WITH (NOLOCK) ON fisaccountcode.FISACCNO = icat.ICOUTPNLACCODE
+left join cmethod WITH (NOLOCK) ON cmethod.cmcode = billdetail.BDCMCODE
+left join oedetail with (nolock) on oedetail.oedid = billdetail.bdoeid
+where /*(hiservices.HSREALCOST = (select max(hiservices.HSREALCOST) from hiservices
+where  hiservices.HSCODE = billdetail.BDISCODE
+AND hiservices.HSPRICEEFFDT <= billdetail.BDPREFORMDT)
+OR histock.HSREALCOST = (select max(histock.HSREALCOST) from histock
+where  histock.HSCODE = billdetail.BDISCODE
+AND histock.HSPRICEEFFDT <= billdetail.BDPREFORMDT))
+AND*/ (billheader.BHDT >= '2023-03-01 00:00:00' AND billheader.BHDT <= '2023-03-31 23:59:59') /** START_DATE | END_DATE **/
+AND billheader.BHCANCELLED = '0'
+AND billdetail.BDISPACKAGE = '0'
+and billheader.BHISPOS = '0'
+AND oedetail.OEDCANCELLED = '0'
+/*AND (registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))*/
+
+UNION ALL
+SELECT 'INVOICE CANCELLED' AS 'DOC TYPE', 
+billheader.BHDT AS 'DOC DATE & TIME', 
+billheader.BHCANCELBT AS 'DOC CANCELLED DATE & TIME', 
+billheader.BHNO AS 'DOC NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billheader.BHPDOCNAME AS 'PRIMARY DOCTOR', 
+billheader.BHPRN AS 'MRN', 
+FIRSTREG.RDATETIME AS 'FIRST VISIT DATE & TIME', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+patient.PIC AS 'PATIENT IC NO', 
+patient.PGENREMARK AS 'PATIENT REMARKS', 
+registration.RREMARK AS 'REGISTRATION REMARKS', 
+billdetail.BDISBCATEGORY AS 'BILLING CATEGORY CODE', 
+billdetail.BDISBCATEGORYDESC AS 'BILLING CATEGORY', 
+billdetail.BDDEPTNAME AS 'ORDER DEPT', 
+billdetail.BDDOCNAME AS 'ORDER DOCTOR', 
+auconspec.ACSDESC AS 'ORDER DOC SPECIALTY', 
+billdetail.BDISCODE AS 'ITEM CODE', 
+billdetail.BDISDESC AS 'ITEM DESCRIPTION', 
+billdetail.BDPREFORMDT AS 'ORDER DATE', 
+billdetail.BDAMT AS 'GROSS PRICE', 
+-1 * billdetail.BDDISCOUNTAMT AS 'DISCOUNT AMOUNT', 
+-1 * billdetail.BDQTY AS 'QUANTITY', 
+-1 * billdetail.BDTOTAL AS 'TOTAL AMOUNT', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) AS 'UNIT COST', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) * billdetail.BDQTY * -1 AS 'TOTAL COST', 
+(CASE WHEN istock.ISCATCODE is not null THEN istock.ISCATCODE ELSE iservices.ISCATCODE END) AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESC', 
+icat.ICOUTPNLACCODE AS 'POSTING ACCOUNT', 
+fisaccountcode.FISACCDESC AS 'POSTING ACCOUNT DESC', 
+billdetail.BDPLACEUNAME AS 'ORDER BY', 
+cmethod.CMDESC AS 'CHARGE METHOD', 
+COMPREFERRALTYPE.CPTDESC AS 'RERFERRAL TYPE', 
+COMPREFERRALSUBTYPE.CPSTDESC AS 'REFERRAL SUBTYPE', 
+COMPREFERRAL.NAME AS 'REFERRAL TYPE'
+FROM billdetail WITH (NOLOCK)
+outer apply (
+	SELECT TOP 1 * FROM hiservices WITH (NOLOCK)
+	WHERE hiservices.HSCODE = billdetail.BDISCODE
+	AND hiservices.HSUPDATEDT < billdetail.BDPREFORMDT
+	order by hiservices.HSUPDATEDT) as SERVCOST
+OUTER APPLY (
+	SELECT top 1 RRN, RDATETIME FROM registration WITH (NOLOCK)
+	LEFT JOIN billheader ON billheader.BHPRN = registration.RRN
+	WHERE billdetail.BHID = billheader.BHID AND
+	RFIRSTVISIT = '1' and RCANCELREGCODE is null
+	order by RDATETIME) AS FIRSTREG
+left join istock WITH (NOLOCK) on istock.ISCODE = billdetail.BDISCODE
+left join iservices WITH (NOLOCK) on iservices.ISCODE = billdetail.BDISCODE
+left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = iservices.ISCATCODE
+--left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
+--left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
+left join billheader WITH (NOLOCK) on billdetail.BHID = billheader.BHID
+left join registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
+left join patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
+left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
+left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
+left join COMPREFERRAL WITH (NOLOCK) on registration.RREFSOURCECODE = COMPREFERRAL.CODE
+left join COMPREFERRALSUBTYPE WITH (NOLOCK) ON COMPREFERRAL.CPSTID = COMPREFERRALSUBTYPE.CPSTID
+left join COMPREFERRALTYPE WITH (NOLOCK) ON COMPREFERRALSUBTYPE.CPTID = COMPREFERRALTYPE.CPTID
+left join fisaccountcode ON fisaccountcode.FISACCNO = icat.ICOUTPNLACCODE
+left join cmethod WITH (NOLOCK) ON cmethod.cmcode = billdetail.BDCMCODE
+left join oedetail with (nolock) on oedetail.oedid = billdetail.bdoeid
+where /*(hiservices.HSREALCOST = (select max(hiservices.HSREALCOST) from hiservices
+where  hiservices.HSCODE = billdetail.BDISCODE
+AND hiservices.HSPRICEEFFDT <= billdetail.BDPREFORMDT)
+OR histock.HSREALCOST = (select max(histock.HSREALCOST) from histock
+where  histock.HSCODE = billdetail.BDISCODE
+AND histock.HSPRICEEFFDT <= billdetail.BDPREFORMDT))
+AND*/ (billheader.BHDT < '2023-03-01 00:00:00'       /** START DATE **/
+AND billheader.BHCANCELBT >= '2023-03-01 00:00:00' AND billheader.BHCANCELBT <= '2023-03-31 23:59:59')  /** START_DATE | END_DATE **/
+AND billdetail.BDISPACKAGE = '0'
+and billheader.BHISPOS = '0'
+/*AND (registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))*/
+
+UNION ALL
+SELECT 'CREDIT NOTE' AS 'DOC TYPE', 
+ccreditnote.CNDT AS 'DOC DATE & TIME', 
+ccreditnote.CNCANCELDT AS 'DOC CANCELLED DATE & TIME', 
+ccreditnote.CNNO AS 'DOC NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billheader.BHPDOCNAME AS 'PRIMARY DOCTOR', 
+ccreditnote.CNRN AS 'MRN', 
+FIRSTREG.RDATETIME AS 'FIRST VISIT DATE & TIME', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+patient.PIC AS 'PATIENT IC NO', 
+patient.PGENREMARK AS 'PATIENT REMARKS', 
+registration.RREMARK AS 'REGISTRATION REMARKS', 
+ibillcategory.IBCCODE AS 'BILLING CATEGORY CODE',
+ibillcategory.IBCDESC AS 'BILLING CATEGORY', 
+ccreditnoteopen.CNODEPTDESC AS 'ORDER DEPARTMENT', 
+billdetail.BDDOCNAME AS 'ORDER DOCTOR', 
+auconspec.ACSDESC AS 'ORDER DOC SPECIALTY', 
+ccreditnoteopen.CNOISCODE AS 'ITEM CODE', 
+ccreditnoteopen.CNODESC AS 'ITEM DESCRIPTION', 
+billdetail.BDPREFORMDT AS 'ORDER DATE', 
+(CASE WHEN ccreditnote.CNREASON = 'SYS' THEN billdetail.BDAMT ELSE '0' END) * -1 AS 'GROSS PRICE', 
+(CASE WHEN ccreditnote.CNREASON = 'SYS'  THEN billdetail.BDDISCOUNTAMT ELSE ccreditnoteopen.CNOTOTAL END) AS 'DISCOUNT AMOUNT', 
+billdetail.BDQTY * -1 AS 'QUANTITY', 
+billdetail.BDTOTAL * -1 AS 'TOTAL AMOUNT', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) AS 'UNIT COST', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) * billdetail.BDQTY * -1 AS 'TOTAL COST', 
+(CASE WHEN istock.ISCATCODE is not null THEN istock.ISCATCODE ELSE iservices.ISCATCODE END) AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESC', 
+icat.ICOUTPNLACCODE AS 'POSTING ACCOUNT', 
+fisaccountcode.FISACCDESC AS 'POSTING ACCOUNT DESC', 
+UXINFO.UFULLNAME AS 'ORDER BY', 
+cmethod.CMDESC AS 'CHARGE METHOD', 
+COMPREFERRALTYPE.CPTDESC AS 'RERFERRAL TYPE', 
+COMPREFERRALSUBTYPE.CPSTDESC AS 'REFERRAL SUBTYPE', 
+COMPREFERRAL.NAME AS 'REFERRAL TYPE'
+FROM ccreditnoteopen WITH (NOLOCK)
+outer apply (
+	SELECT TOP 1 * FROM hiservices WITH (NOLOCK)
+	LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+	WHERE hiservices.HSCODE = billdetail.BDISCODE
+	AND hiservices.HSUPDATEDT < billdetail.BDPREFORMDT
+	order by hiservices.HSUPDATEDT) as SERVCOST
+OUTER APPLY (
+	SELECT top 1 RRN, RDATETIME FROM registration WITH (NOLOCK)
+	LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+	LEFT JOIN billheader ON billheader.BHPRN = registration.RRN
+	WHERE billdetail.BHID = billheader.BHID AND
+	RFIRSTVISIT = '1' and RCANCELREGCODE is null
+	order by RDATETIME) AS FIRSTREG
+LEFT JOIN ccreditnote WITH (NOLOCK) ON ccreditnoteopen.CNOCNO = ccreditnote.CNNO
+LEFT JOIN billheader WITH (NOLOCK) ON billheader.BHID = ccreditnote.CNBHID
+LEFT JOIN registration WITH (NOLOCK) on registration.RRN = billheader.BHPRN
+LEFT JOIN patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
+LEFT JOIN istock WITH (NOLOCK) on istock.ISCODE = ccreditnoteopen.CNOISCODE
+LEFT JOIN iservices WITH (NOLOCK) on iservices.ISCODE = ccreditnoteopen.CNOISCODE
+LEFT JOIN ibillcategory WITH (NOLOCK) ON ibillcategory.IBCCODE = iservices.ISBCATEGORY OR ibillcategory.IBCCODE = istock.ISBCATEGORY
+LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
+left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
+--left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
+--left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
+left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = iservices.ISCATCODE
+left join COMPREFERRAL WITH (NOLOCK) on registration.RREFSOURCECODE = COMPREFERRAL.CODE
+left join COMPREFERRALSUBTYPE WITH (NOLOCK) ON COMPREFERRAL.CPSTID = COMPREFERRALSUBTYPE.CPSTID
+left join COMPREFERRALTYPE WITH (NOLOCK) ON COMPREFERRALSUBTYPE.CPTID = COMPREFERRALTYPE.CPTID
+left join fisaccountcode WITH (NOLOCK) ON fisaccountcode.FISACCNO = icat.ICOUTPNLACCODE
+left join UXINFO WITH (NOLOCK) on UXINFO.UNITID = ccreditnote.CNUID
+left join cmethod WITH (NOLOCK) ON cmethod.cmcode = billdetail.BDCMCODE
+left join oedetail with (nolock) on oedetail.oedid = billdetail.bdoeid
+WHERE /*(registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))
+AND (hiservices.HSREALCOST = (select max(hiservices.HSREALCOST) from hiservices
+where  hiservices.HSCODE = billdetail.BDISCODE
+AND hiservices.HSPRICEEFFDT <= billdetail.BDPREFORMDT)
+OR histock.HSREALCOST = (select max(histock.HSREALCOST) from histock
+where  histock.HSCODE = billdetail.BDISCODE
+AND histock.HSPRICEEFFDT <= billdetail.BDPREFORMDT))
+AND*/ (ccreditnote.CNDT >= '2023-03-01 00:00:00' AND ccreditnote.CNDT <= '2023-03-31 23:59:59')   /** START_DATE | END_DATE **/
+AND ccreditnote.CNCANCELDT is null
+and billheader.BHISPOS = '0'
+/*AND (registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))*/
+
+UNION ALL
+SELECT 'CREDIT NOTE (CANCELLED)' AS 'DOC TYPE', 
+ccreditnote.CNDT AS 'DOC DATE & TIME', 
+ccreditnote.CNCANCELDT AS 'DOC CANCELLED DATE & TIME', 
+ccreditnote.CNNO AS 'DOC NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billheader.BHPDOCNAME AS 'PRIMARY DOCTOR', 
+ccreditnote.CNRN AS 'MRN', 
+FIRSTREG.RDATETIME AS 'FIRST VISIT DATE & TIME', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+patient.PIC AS 'PATIENT IC NO', 
+patient.PGENREMARK AS 'PATIENT REMARKS', 
+registration.RREMARK AS 'REGISTRATION REMARKS', 
+ibillcategory.IBCCODE AS 'BILLING CATEGORY CODE',
+ibillcategory.IBCDESC AS 'BILLING CATEGORY', 
+ccreditnoteopen.CNODEPTDESC AS 'ORDER DEPARTMENT', 
+billdetail.BDDOCNAME AS 'ORDER DOCTOR', 
+auconspec.ACSDESC AS 'ORDER DOC SPECIALTY', 
+ccreditnoteopen.CNOISCODE AS 'ITEM CODE', 
+ccreditnoteopen.CNODESC AS 'ITEM DESCRIPTION', 
+billdetail.BDPREFORMDT AS 'ORDER DATE', 
+(CASE WHEN ccreditnote.CNREASON = 'SYS' THEN billdetail.BDAMT ELSE '0' END) * -1 AS 'GROSS PRICE', 
+(CASE WHEN ccreditnote.CNREASON = 'SYS'  THEN billdetail.BDDISCOUNTAMT ELSE ccreditnoteopen.CNOTOTAL END) AS 'DISCOUNT AMOUNT', 
+billdetail.BDQTY * -1 AS 'QUANTITY', 
+billdetail.BDTOTAL * -1 AS 'TOTAL AMOUNT', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) AS 'UNIT COST', 
+(CASE WHEN oedetail.OEDWAC iS null THEN SERVCOST.HSREALCOST ELSE oedetail.OEDWAC END) * billdetail.BDQTY * -1 AS 'TOTAL COST', 
+(CASE WHEN istock.ISCATCODE is not null THEN istock.ISCATCODE ELSE iservices.ISCATCODE END) AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESC', 
+icat.ICOUTPNLACCODE AS 'POSTING ACCOUNT', 
+fisaccountcode.FISACCDESC AS 'POSTING ACCOUNT DESC', 
+UXINFO.UFULLNAME AS 'ORDER BY', 
+cmethod.CMDESC AS 'CHARGE METHOD', 
+COMPREFERRALTYPE.CPTDESC AS 'RERFERRAL TYPE', 
+COMPREFERRALSUBTYPE.CPSTDESC AS 'REFERRAL SUBTYPE', 
+COMPREFERRAL.NAME AS 'REFERRAL TYPE'
+FROM ccreditnoteopen WITH (NOLOCK)
+outer apply (
+	SELECT TOP 1 * FROM hiservices WITH (NOLOCK)
+	LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+	WHERE hiservices.HSCODE = billdetail.BDISCODE
+	AND hiservices.HSUPDATEDT < billdetail.BDPREFORMDT
+	order by hiservices.HSUPDATEDT) as SERVCOST
+OUTER APPLY (
+	SELECT top 1 RRN, RDATETIME FROM registration WITH (NOLOCK)
+	LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+	LEFT JOIN billheader ON billheader.BHPRN = registration.RRN
+	WHERE billdetail.BHID = billheader.BHID AND
+	RFIRSTVISIT = '1' and RCANCELREGCODE is null
+	order by RDATETIME) AS FIRSTREG
+LEFT JOIN ccreditnote WITH (NOLOCK) ON ccreditnoteopen.CNOCNO = ccreditnote.CNNO
+LEFT JOIN billheader WITH (NOLOCK) ON billheader.BHID = ccreditnote.CNBHID
+LEFT JOIN registration WITH (NOLOCK) on registration.RRN = billheader.BHPRN
+LEFT JOIN patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
+LEFT JOIN istock WITH (NOLOCK) on istock.ISCODE = ccreditnoteopen.CNOISCODE
+LEFT JOIN iservices WITH (NOLOCK) on iservices.ISCODE = ccreditnoteopen.CNOISCODE
+LEFT JOIN ibillcategory WITH (NOLOCK) ON ibillcategory.IBCCODE = iservices.ISBCATEGORY OR ibillcategory.IBCCODE = istock.ISBCATEGORY
+LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
+left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
+--left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
+--left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
+left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = iservices.ISCATCODE
+left join COMPREFERRAL WITH (NOLOCK) on registration.RREFSOURCECODE = COMPREFERRAL.CODE
+left join COMPREFERRALSUBTYPE WITH (NOLOCK) ON COMPREFERRAL.CPSTID = COMPREFERRALSUBTYPE.CPSTID
+left join COMPREFERRALTYPE WITH (NOLOCK) ON COMPREFERRALSUBTYPE.CPTID = COMPREFERRALTYPE.CPTID
+left join fisaccountcode ON fisaccountcode.FISACCNO = icat.ICOUTPNLACCODE
+left join UXINFO on UXINFO.UNITID = ccreditnote.CNUID
+left join cmethod WITH (NOLOCK) ON cmethod.cmcode = billdetail.BDCMCODE
+left join oedetail with (nolock) on oedetail.oedid = billdetail.bdoeid
+WHERE /*(registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))
+AND (hiservices.HSREALCOST = (select max(hiservices.HSREALCOST) from hiservices
+where  hiservices.HSCODE = billdetail.BDISCODE
+AND hiservices.HSPRICEEFFDT <= billdetail.BDPREFORMDT)
+OR histock.HSREALCOST = (select max(histock.HSREALCOST) from histock
+where  histock.HSCODE = billdetail.BDISCODE
+AND histock.HSPRICEEFFDT <= billdetail.BDPREFORMDT))
+and*/ billheader.BHISPOS = '0'
+/*AND (registration.RDATETIME = (select min(registration.RDATETIME) from registration
+where  registration.RRN = billheader.bhprn))*/
+AND (ccreditnote.CNDT < '2023-03-01 00:00:00'     /** START_DATE **/
+AND ccreditnote.CNCANCELDT >= '2023-03-01 00:00:00' AND ccreditnote.CNCANCELDT <= '2023-03-31 23:59:59')     /** START_DATE | END_DATE **/
+;
