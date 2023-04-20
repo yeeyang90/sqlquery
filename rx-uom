@@ -1,0 +1,8 @@
+select istock.ISCODE AS 'ITEM CODE', 
+istock.ISDESC AS 'ITEM DESCRIPTION', 
+iuom.IUCODE AS 'RX UOM', 
+iuom.IUDESC AS 'RX UOM DESCRIPTION', 
+istockp.ISPISDOSAGEUOM AS 'DOSAGE' 
+from istockp with (nolock)
+left join istock with (nolock) on istock.ISID = istockp.ISPISID
+left join iuom with (nolock) on iuom.IUID = istockp.ISPUOM
