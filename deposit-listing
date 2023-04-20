@@ -1,0 +1,19 @@
+select 
+cdeposit.CDRN AS 'MRN', 
+patient.PNAME AS 'PATIENT NAME', 
+cdeposit.CDID AS 'DEPOSIT NO.', 
+CDEPOSIT.CDDT AS 'DEPOSIT DATE', 
+cpaymode.CPDESC AS 'PAYMODE', 
+cdeposit.CDAMOUNT AS 'DEPOSIT AMOUNT', 
+cdeposit.CDREFUNDAMT AS 'DEPOSIT REFUNDED',
+DEPUT.DEPU AS 'DEPOSIT UTILISED',
+cdeposit.CDBALANCE AS 'BALANCE DEPOSIT', 
+(CASE WHEN cdeposit.CDCANCELLED = '1' THEN 'YES' ELSE 'NO' END) AS 'IS CANCELLED'
+from cdeposit with (nolock)
+outer apply (
+	SELECT creceiptitem.CRICDID [DEPNO], SUM(creceiptitem.CRIAMOUNT) [DEPU]
+	FROM creceiptitem with (nolock)
+	where creceiptitem.CRICDID = cdeposit.CDID
+	GROUP BY creceiptitem.CRICDID) AS DEPUT
+LEFT JOIN patient with (nolock) ON patient.PRN = cdeposit.CDRN
+LEFT JOIN cpaymode with (nolock) ON cpaymode.CPCODE = cdeposit.CDPAYM
