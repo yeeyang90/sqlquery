@@ -1,0 +1,4 @@
+select * From billheader with (nolock)
+left join billdetail bwith (nolock) on billdetail.bhid = billheader.bhid
+left join oedetail with (nolock) on oedetail.oedid = billdetail.bdoeid
+where bh.BHCANCELLED = 0
