@@ -1,0 +1,82 @@
+select 
+'INVOICE' AS 'TYPE', 
+billheader.BHPRN AS 'MRN', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+(CASE WHEN PIC = '' THEN PPASSNO ELSE PIC END) AS 'IC/PASSPORT', 
+patient.PFOREIGN AS 'IS FORIEGN PATIENT', 
+billheader.BHDT AS 'BILL DATE', 
+billheader.BHNO AS 'BILL NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billdetail.BDPREFORMDT 'TRANSACTION DATE', 
+billdetail.BDISCODE AS 'ITEM CODE', 
+billdetail.BDISDESC AS 'ITEM DESCRIPTION', 
+billdetail.BDISBCATEGORY AS 'BILLING CATEGORY CODE', 
+billdetail.BDISBCATEGORYDESC AS 'BILLING CATEGORY', 
+iservices.ISCATCODE AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESCRIPTION', 
+billdetail.BDQTY AS 'QUANTITY', 
+billdetail.BDTOTAL AS 'TOTAL PRICE', 
+COSTT.HSREALCOST AS 'AS UNIT COST', 
+billdetail.BDISPACKAGEITEM AS 'IS PACKAGE ITEM',
+billdetail.BDQTY * COSTT.HSREALCOST as 'TOTAL COST'
+from billdetail with (nolock)
+outer apply (
+	select top 1 *
+	from hiservices with (nolock)
+	LEFT JOIN oedetail with (nolock) on billdetail.BDOEID = oedetail.OEDID
+	where billdetail.BDISCODE = hiservices.HSCODE
+	and oedetail.OEDCONFIRMDT > hiservices.HSUPDATEDT
+	order by hiservices.HSUPDATEDT desc) as COSTT
+left join billheader with (nolock) on billdetail.BHID = billheader.BHID
+left join iservices with (nolock) on billdetail.BDISCODE = iservices.ISCODE
+left join patient with (nolock) on patient.PRN = billheader.BHPRN
+left join icat with (nolock) on iservices.ISCATCODE = icat.ICCODE
+where (iservices.ISCATCODE = '7100' OR iservices.ISCATCODE = '15100')
+AND billheader.BHCANCELLED = '0'
+AND billdetail.BDISPACKAGE = '0'
+AND iservices.ISTARGETCLASS = 'Lxelement'
+AND (billheader.BHDT >= '2023-01-01 00:00:00' AND billheader.BHDT <= '2023-01-31 23:59:59')  /** START_DATE | END_DATE **/
+UNION ALL
+select 
+'CREDIT NOTE' AS 'TYPE', 
+ccreditnote.CNRN AS 'MRN', 
+billheader.BHPNAME AS 'PATIENT NAME', 
+(CASE WHEN PIC = '' THEN PPASSNO ELSE PIC END) AS 'IC/PASSPORT', 
+patient.PFOREIGN AS 'IS FORIEGN PATIENT', 
+ccreditnote.CNDT AS 'CN DATE', 
+ccreditnote.CNNO AS 'CN NO', 
+billheader.BHPRVISITNO AS 'VISIT NO', 
+billdetail.BDPREFORMDT 'TRANSACTION DATE', 
+ccreditnoteopen.CNOISCODE AS 'ITEM CODE', 
+ccreditnoteopen.CNODESC AS 'ITEM DESCRIPTION', 
+billdetail.BDISBCATEGORY AS 'BILLING CATEGORY CODE', 
+billdetail.BDISBCATEGORYDESC AS 'BILLING CATEGORY', 
+iservices.ISCATCODE AS 'SERVICE GROUP CODE', 
+icat.ICDESC AS 'SERVICE GROUP DESCRIPTION', 
+billdetail.BDQTY * -1 AS 'QUANTITY', 
+billdetail.BDTOTAL * -1 AS 'TOTAL PRICE', 
+COSTT.HSREALCOST * -1 AS 'UNIT COST', 
+billdetail.BDISPACKAGEITEM AS 'IS PACKAGE ITEM',
+billdetail.BDQTY * iservices.ISREALCOST * -1 as 'TOTAL COST'
+from ccreditnoteopen WITH (NOLOCK)
+outer apply (
+	select top 1 *
+	from hiservices with (nolock)
+	LEFT JOIN billdetail with (nolock) on billdetail.BDID = ccreditnoteopen.CNOBDID
+	where ccreditnoteopen.CNOISCODE = hiservices.HSCODE
+	and billdetail.BDPREFORMDT > hiservices.HSUPDATEDT
+	order by hiservices.HSUPDATEDT desc) as COSTT
+LEFT JOIN ccreditnote WITH (NOLOCK) ON ccreditnoteopen.CNOCNO = ccreditnote.CNNO
+LEFT JOIN billheader WITH (NOLOCK) ON billheader.BHID = ccreditnote.CNBHID
+LEFT JOIN patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
+LEFT JOIN iservices WITH (NOLOCK) on iservices.ISCODE = ccreditnoteopen.CNOISCODE
+left join icat WITH (NOLOCK) on icat.ICCODE = iservices.ISCATCODE
+LEFT JOIN billdetail WITH (NOLOCK) ON billdetail.BDID = ccreditnoteopen.CNOBDID
+where (iservices.ISCATCODE = '7100' OR iservices.ISCATCODE = '15100')
+AND (ccreditnote.CNDT >= '2023-01-01 00:00:00' AND ccreditnote.CNDT <= '2023-01-31 23:59:59')   /** START_DATE | END_DATE **/
+AND ccreditnote.CNCANCELDT is null
+AND iservices.ISTARGETCLASS = 'Lxelement'
+AND billheader.BHCANCELLED = '0'
+AND billdetail.BDISPACKAGE = '0'
+;
+
