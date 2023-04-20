@@ -1,0 +1,18 @@
+select
+cdebtorreceiptlink.CDRLCRNO AS 'RECEIPT NO.', 
+creceipt.CRDT AS 'RECEIPT DT', 
+(CASE WHEN creceipt.CRCANCELLED = '1' THEN 'YES' ELSE 'NO' END) AS 'CANCELLED?', 
+cdebtorreceiptlink.CDRLPNAME AS 'PATIENT NAME', 
+cdebtorreceiptlink.CDRLPRN AS 'MRN', 
+cdebtorreceiptlink.CDRLBHNO AS 'INVOICE NO.', 
+billheader.BHDT as 'BILL DT', 
+cdebtorreceiptlink.CDRLVNO AS 'VISIT NO.', 
+cdebtorreceiptlink.CDRLAMOUNT AS 'RECEIPT AMOUNT', 
+cpaymode.CPDESC AS 'PAYMODE', 
+creceiptitem.CRICDID AS 'DEPOSIT NO. UTILISED'
+from cdebtorreceiptlink with (nolock)
+LEFT JOIN creceiptitem with (nolock) ON creceiptitem.CRIID = cdebtorreceiptlink.CDRLCRIID
+LEFT JOIN cpaymode with (nolock) ON cpaymode.CPCODE = creceiptitem.CRIPAYM
+LEFT JOIN creceipt with (nolock) on creceipt.CRNO = cdebtorreceiptlink.CDRLCRNO
+LEFT JOIN billheader with (nolock) on billheader.BHNO = cdebtorreceiptlink.CDRLBHNO
+ORDER BY creceipt.CRDT
