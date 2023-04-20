@@ -1,0 +1,71 @@
+select
+registration.RRN AS 'MRN', 
+registration.RPNAME AS 'PATIENT NAME', 
+registration.RVN AS 'VISIT NO.', 
+RVC.RVDESC AS 'VISIT CLASS', 
+registration.RPRIMARYDOCNAME AS 'PRIMARY PRACTITIONER', 
+BH.BHNO AS 'BILL NO.', 
+BH.BHTOTAL AS 'BILL TOTAL', 
+CR.CRNO AS 'RECEIPT NO.', 
+CR.CRTOTAL AS 'RECEIPT TOTAL', 
+registration.RDATETIME AS 'REGISTRATION DT', 
+FIRSTVITAL.NCDDATETIME AS 'FIRST VITAL DT', 
+primaryDocFirstAccessFs.ULDT AS 'CONSULT STARTED DT', 
+REGDOCLINK.RDCOMPLETEDT AS 'CONSULT COMPLETED DT',
+FIRSTRX.pdt AS 'RX DT', 
+RXCHARGE.preparedt AS 'RX CHARGED DT', 
+LASTRX.pcompletedt AS 'RX DISPENSED DT', 
+BH.BHDT AS 'BILL DT', 
+CR.CRDT AS 'RECEIPT DT'
+from registration WITH (NOLOCK)
+outer apply (
+	select top 1 * 
+	from unitlog  WITH (NOLOCK)
+	where unitlog.ULTARGET = registration.rrn 
+	and unitlog.uluid = registration.RPRIMARYDOC 
+	and unitlog.ullogtype = 2
+	AND UNITLOG.ULDT > REGISTRATION.RDATETIME) as primaryDocFirstAccessFs
+OUTER APPLY (
+	SELECT TOP 1 * 
+	from REGDOCLINK WITH (NOLOCK)
+	WHERE REGDOCLINK.RDRID = RID) AS REGDOCLINK
+OUTER APPLY (
+	SELECT TOP 1 *
+	FROM prescription WITH (NOLOCK)
+	WHERE prescription.prvn = registration.RVN
+	AND prescription.pstatus != 'X') AS FIRSTRX
+OUTER APPLY (
+	SELECT TOP 1 *
+	FROM prescription WITH (NOLOCK)
+	WHERE prescription.prvn = registration.RVN
+	AND prescription.pstatus != 'X'
+	ORDER BY prescription.pcompletedt DESC) AS LASTRX
+OUTER APPLY (
+	SELECT TOP 1 *
+	FROM NXCLINICALDATA WITH (NOLOCK)
+	WHERE NCDVISITNO = registration.RVN) AS FIRSTVITAL
+OUTER APPLY (
+	SELECT TOP 1 
+	pitem.piprepareddt [preparedt],
+	prescription.prvn [vn]
+	FROM pitem WITH (NOLOCK)
+	LEFT JOIN pitemprepare WITH (NOLOCK) on pitem.piid = pitemprepare.PIPID
+	LEFT JOIN prescription WITH (NOLOCK) on pitem.pid = prescription.pid
+	WHERE prescription.prvn = registration.RVN
+	ORDER BY pitem.piprepareddt DESC) AS RXCHARGE
+OUTER APPLY (
+	SELECT TOP 1 *
+	FROM billheader WITH (NOLOCK)
+	WHERE billheader.BHPRVISITNO = registration.RVN) as BH
+OUTER APPLY (
+	SELECT TOP 1
+	creceipt.CRNO [crno], 
+	creceipt.CRTOTAL [crtotal], 
+	creceipt.CRDT [CRDT], 
+	cdebtorreceiptlink.CDRLVNO [vvn]
+	FROM creceipt WITH (NOLOCK)
+	LEFT JOIN cdebtorreceiptlink WITH (NOLOCK) ON cdebtorreceiptlink.CDRLCRNO = creceipt.CRNO
+	WHERE cdebtorreceiptlink.CDRLVNO = registration.RVN) AS CR
+LEFT JOIN regvclasslink RVC WITH (NOLOCK) ON RVC.RVRID = registration.RID
+WHERE (registration.RDATETIME >= '2022-05-01 00:00:00' AND registration.RDATETIME <= '2022-05-30 23:59:59')
+and RVC.RVPRIMARY = '1'
