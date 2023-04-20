@@ -1,0 +1,18 @@
+select oebook.PRN as 'MRN', 
+oebook.PNAME AS 'PT NAME', 
+oebook.PVISITNO AS 'VISIT NO.', 
+billheader.BHNO AS 'BILL NO', 
+oedetail.OEDDT as 'ORDER DT', 
+oedetail.OEDISCODE as 'ITEM CODE', 
+oedetail.OEDDESC AS 'ITEM NAME', 
+oedetail.OEDQTY as 'QTY', 
+oedetail.OEDNETTAMOUNT AS 'BILLED AMOUNT', 
+oedetail.OEDCONFIRMUNAME AS 'CHARGE BY' 
+from oedetail with (nolock)
+left join oebook with (nolock) on oebook.OEBID = oedetail.OEBID
+left join istock with (nolock) on istock.ISCODE =  oedetail.OEDISCODE
+left join billdetail with (nolock) on billdetail.BDOEID = oedetail.OEDID
+left join billheader with (nolock) on billdetail.BHID = billheader.BHID
+where OEBTYPE = 'POS' and istock.ISCONSIGMENT = '1'
+and (oebook.OEBDT >= '2022-12-01 00:00:00' and oebook.OEBDT <= '2022-12-31 23:59:59')   /** START_DATE | END_DATE **/   
+and oedetail.OEDCANCELLED = '0'
