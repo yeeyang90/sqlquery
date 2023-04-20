@@ -167,4 +167,4 @@ SELECT
     [Over270Days],
     PercentOver270Days
 FROM NullifiedResult
-ORDER BY MonthYear;
+ORDER BY MonthYear
