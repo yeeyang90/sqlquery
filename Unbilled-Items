@@ -1,0 +1,16 @@
+select oedetail.OEBID[Order Book No.], 
+oedetail.OEDID[Order No.], 
+oedetail.OEDDT[Order Date & Time], 
+oebook.PRN[MRN], 
+oebook.PNAME[Patient Name], 
+oedetail.OEDDESC[Item Description], 
+oedetail.OEDNETTAMOUNT[NETT AMOUNT], 
+oedetail.OEDPLACERUNAME[Order User Name], 
+oedetail.OEDDOCNAME[Order Doctor], 
+oedetail.OEDISPACKAGE[Is Package]
+FROM oedetail
+LEFT JOIN oebook
+ON oedetail.OEBID = oebook.OEBID
+WHERE oedetail.OEDBILLDT is null
+AND oedetail.OEDCANCELUID is null
+AND oedetail.OEDISPACKAGEITEM = '0'
