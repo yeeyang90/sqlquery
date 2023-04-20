@@ -1,0 +1,170 @@
+/*** INVOICE LISTING ***/
+select 
+BHNO [InvoiceNo], BHDT [InvoiceDateTime], BHTOTAL [InvoieTotal]
+from billheader WITH (NOLOCK)
+where BHCANCELLED = '0'
+
+/*** RECEIPT LISTING ***/
+select CDRLCRNO [ReceiptNo], creceipt.CRDT [ReceiptDateTime], cdebtorreceiptlink.CDRLAMOUNT [ReceiptTotal], cdebtorreceiptlink.CDRLBHNO [InvoiceNo]
+from cdebtorreceiptlink WITH (NOLOCK)
+left join creceipt on creceipt.CRNO = cdebtorreceiptlink.CDRLCRNO
+where creceipt.CRCANCELLED = '0'
+
+/*** CN LISTING ***/
+select CNBHNO [InvoiceNo], CNDT [CNDateTime], CNTOTAL[CNAmount] from ccreditnote
+where CNCANCELLED = '0' and CNREASON = 'SYS'
+
+--- OUTSTANDING LADDER TABLE REQUESTED BY WAHIDA / CHERVINDER ---
+WITH InvoiceSummary AS (
+    SELECT
+        DATEFROMPARTS(YEAR(BHDT), MONTH(BHDT), 1) AS MonthYear,
+        SUM(BHTOTAL) AS TotalSales
+    FROM billheader WITH (NOLOCK)
+    WHERE BHCANCELLED = '0'
+    GROUP BY DATEFROMPARTS(YEAR(BHDT), MONTH(BHDT), 1)
+),
+ReceiptSummary AS (
+    SELECT
+        DATEFROMPARTS(YEAR(InvoiceDateTime), MONTH(InvoiceDateTime), 1) AS InvoiceMonthYear,
+        DATEFROMPARTS(YEAR(ReceiptDateTime), MONTH(ReceiptDateTime), 1) AS ReceiptMonthYear,
+        SUM(ReceiptTotal) AS ReceiptAmount,
+        InvoiceNo
+    FROM (
+        SELECT
+            BHDT AS InvoiceDateTime,
+            CRDT AS ReceiptDateTime,
+            cdebtorreceiptlink.CDRLAMOUNT AS ReceiptTotal,
+            cdebtorreceiptlink.CDRLBHNO AS InvoiceNo
+        FROM creceipt WITH (NOLOCK)
+        LEFT JOIN cdebtorreceiptlink ON creceipt.CRNO = cdebtorreceiptlink.CDRLCRNO
+        INNER JOIN billheader WITH (NOLOCK) ON cdebtorreceiptlink.CDRLBHNO = billheader.BHNO
+        WHERE creceipt.CRCANCELLED = '0' AND billheader.BHCANCELLED = '0'
+        
+        UNION ALL
+        
+        SELECT
+            BHDT AS InvoiceDateTime,
+            CNDT AS CNDateTime,
+            CNTOTAL AS CNAmount,
+            CNBHNO AS InvoiceNo
+        FROM ccreditnote WITH (NOLOCK)
+        INNER JOIN billheader WITH (NOLOCK) ON ccreditnote.CNBHNO = billheader.BHNO
+        WHERE ccreditnote.CNCANCELLED = '0' AND ccreditnote.CNREASON = 'SYS' AND billheader.BHCANCELLED = '0'
+    ) AS Receipts
+    GROUP BY DATEFROMPARTS(YEAR(InvoiceDateTime), MONTH(InvoiceDateTime), 1), DATEFROMPARTS(YEAR(ReceiptDateTime), MONTH(ReceiptDateTime), 1), InvoiceNo
+)
+-- Run the next part
+, Combined AS (
+    SELECT
+        I.MonthYear,
+        I.TotalSales,
+        COALESCE(SUM(CASE WHEN I.MonthYear = R.ReceiptMonthYear THEN R.ReceiptAmount END), 0) AS CollectionOfTheMonth,
+        COALESCE(SUM(CASE WHEN I.MonthYear < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 1, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection30Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 1, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 2, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection60Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 2, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 3, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection90Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 3, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 4, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection120Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 4, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 5, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection150Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 5, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 6, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection180Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 6, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 7, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection210Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 7, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 8, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection240Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 8, I.MonthYear) < R.ReceiptMonthYear AND R.ReceiptMonthYear <= DATEADD(MONTH, 9, I.MonthYear) THEN R.ReceiptAmount END), 0) AS Collection270Days,
+        COALESCE(SUM(CASE WHEN DATEADD(MONTH, 9, I.MonthYear) < R.ReceiptMonthYear THEN R.ReceiptAmount END), 0) AS CollectionOver270Days
+    FROM InvoiceSummary I
+    LEFT JOIN ReceiptSummary R ON I.MonthYear = R.InvoiceMonthYear
+    GROUP BY I.MonthYear, I.TotalSales
+)
+-- Run the next part
+, Result AS (
+    SELECT
+        FORMAT(MonthYear, 'yyyy-MM') AS MonthYear,
+        TotalSales,
+        CollectionOfTheMonth,
+        TotalSales - CollectionOfTheMonth AS OutstandtingOfTheMonth,
+        CollectionOfTheMonth / TotalSales AS PercentCollectionOfTheMonth,
+        (TotalSales - CollectionOfTheMonth) / TotalSales AS PercentOutstandintOfTheMonth,
+        TotalSales - CollectionOfTheMonth - Collection30Days AS [30Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days) / TotalSales AS Percent30Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days AS [60Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days) / TotalSales AS Percent60Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days AS [90Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days) / TotalSales AS Percent90Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days AS [120Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days) / TotalSales AS Percent120Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days AS [150Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days) / TotalSales AS Percent150Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days AS [180Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days) / TotalSales AS Percent180Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days AS [210Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days) / TotalSales AS Percent210Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days AS [240Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days) / TotalSales AS Percent240Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days - Collection270Days AS [270Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days - Collection270Days) / TotalSales AS Percent270Days,
+        TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days - Collection270Days + CollectionOver270Days AS [Over270Days],
+        (TotalSales - CollectionOfTheMonth - Collection30Days - Collection60Days - Collection90Days - Collection120Days - Collection150Days - Collection180Days - Collection210Days - Collection240Days - Collection270Days + CollectionOver270Days) / TotalSales AS PercentOver270Days
+    FROM Combined
+)
+-- Run the next part
+
+, NullifiedResult AS (
+    SELECT
+        MonthYear,
+        TotalSales,
+        CollectionOfTheMonth,
+        OutstandtingOfTheMonth,
+        PercentCollectionOfTheMonth,
+        PercentOutstandintOfTheMonth,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM') THEN [30Days] END AS [30Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM') THEN Percent30Days END AS Percent30Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -2, GETDATE()), 'yyyy-MM') THEN [60Days] END AS [60Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -2, GETDATE()), 'yyyy-MM') THEN Percent60Days END AS Percent60Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -3, GETDATE()), 'yyyy-MM') THEN [90Days] END AS [90Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -3, GETDATE()), 'yyyy-MM') THEN Percent90Days END AS Percent90Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -4, GETDATE()), 'yyyy-MM') THEN [120Days] END AS [120Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -4, GETDATE()), 'yyyy-MM') THEN Percent120Days END AS Percent120Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -5, GETDATE()), 'yyyy-MM') THEN [150Days] END AS [150Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -5, GETDATE()), 'yyyy-MM') THEN Percent150Days END AS Percent150Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy-MM') THEN [180Days] END AS [180Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy-MM') THEN Percent180Days END AS Percent180Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -7, GETDATE()), 'yyyy-MM') THEN [210Days] END AS [210Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -7, GETDATE()), 'yyyy-MM') THEN Percent210Days END AS Percent210Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -8, GETDATE()), 'yyyy-MM') THEN [240Days] END AS [240Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -8, GETDATE()), 'yyyy-MM') THEN Percent240Days END AS Percent240Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -9, GETDATE()), 'yyyy-MM') THEN [270Days] END AS [270Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -9, GETDATE()), 'yyyy-MM') THEN Percent270Days END AS Percent270Days,
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -10, GETDATE()), 'yyyy-MM') THEN [Over270Days] END AS [Over270Days],
+        CASE WHEN MonthYear <= FORMAT(DATEADD(MONTH, -10, GETDATE()), 'yyyy-MM') THEN PercentOver270Days END AS PercentOver270Days
+    FROM Result
+)
+-- Run the next part
+
+
+SELECT
+    MonthYear,
+    TotalSales,
+    CollectionOfTheMonth,
+    OutstandtingOfTheMonth,
+    PercentCollectionOfTheMonth,
+    PercentOutstandintOfTheMonth,
+    [30Days],
+    Percent30Days,
+    [60Days],
+    Percent60Days,s
+    [90Days],
+    Percent90Days,
+    [120Days],
+    Percent120Days,
+    [150Days],
+    Percent150Days,
+    [180Days],
+    Percent180Days,
+    [210Days],
+    Percent210Days,
+    [240Days],
+    Percent240Days,
+    [270Days],
+    Percent270Days,
+    [Over270Days],
+    PercentOver270Days
+FROM NullifiedResult
+ORDER BY MonthYear;
