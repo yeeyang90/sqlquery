@@ -69,6 +69,10 @@ OUTER APPLY (
 	FROM creceipt WITH (NOLOCK)
 	LEFT JOIN cdebtorreceiptlink WITH (NOLOCK) ON cdebtorreceiptlink.CDRLCRNO = creceipt.CRNO
 	WHERE cdebtorreceiptlink.CDRLVNO = registration.RVN) AS CR
+OUTER APPLY (
+	SELECT TOP 1 * FROM PatientDiagnosis WITH (NOLOCK)
+	WHERE PatientDiagnosis.VISITNO = registration.RVN
+	AND PatientDiagnosis.DIAGNOSISTYPE = 'PRIMARY') AS PD
 LEFT JOIN regvclasslink RVC WITH (NOLOCK) ON RVC.RVRID = registration.RID
 WHERE (registration.RDATETIME >= '2022-05-01 00:00:00' AND registration.RDATETIME <= '2022-05-30 23:59:59')
 and RVC.RVPRIMARY = '1'
