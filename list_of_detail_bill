@@ -52,7 +52,7 @@ left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = 
 --left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
 --left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
 left join billheader WITH (NOLOCK) on billdetail.BHID = billheader.BHID
-left join registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
+LEFT JOIN registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
 left join patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
 left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
 left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
@@ -132,7 +132,7 @@ left join icat WITH (NOLOCK) on icat.ICCODE = istock.ISCATCODE OR icat.ICCODE = 
 --left join hiservices WITH (NOLOCK) on hiservices.HSCODE = billdetail.BDISCODE
 --left join histock WITH (NOLOCK) on histock.HSCODE = billdetail.BDISCODE
 left join billheader WITH (NOLOCK) on billdetail.BHID = billheader.BHID
-left join registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
+LEFT JOIN registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
 left join patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
 left join UXCONSULTANT WITH (NOLOCK) on billdetail.BDDOCCODE = UXCONSULTANT.UCACCOUNTCODE
 left join auconspec WITH (NOLOCK) on UXCONSULTANT.UCSPEC = auconspec.ACSID
@@ -209,7 +209,7 @@ OUTER APPLY (
 	order by RDATETIME) AS FIRSTREG
 LEFT JOIN ccreditnote WITH (NOLOCK) ON ccreditnoteopen.CNOCNO = ccreditnote.CNNO
 LEFT JOIN billheader WITH (NOLOCK) ON billheader.BHID = ccreditnote.CNBHID
-LEFT JOIN registration WITH (NOLOCK) on registration.RRN = billheader.BHPRN
+LEFT JOIN registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
 LEFT JOIN patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
 LEFT JOIN istock WITH (NOLOCK) on istock.ISCODE = ccreditnoteopen.CNOISCODE
 LEFT JOIN iservices WITH (NOLOCK) on iservices.ISCODE = ccreditnoteopen.CNOISCODE
@@ -295,7 +295,7 @@ OUTER APPLY (
 	order by RDATETIME) AS FIRSTREG
 LEFT JOIN ccreditnote WITH (NOLOCK) ON ccreditnoteopen.CNOCNO = ccreditnote.CNNO
 LEFT JOIN billheader WITH (NOLOCK) ON billheader.BHID = ccreditnote.CNBHID
-LEFT JOIN registration WITH (NOLOCK) on registration.RRN = billheader.BHPRN
+LEFT JOIN registration WITH (NOLOCK) on registration.RVN = billheader.BHPRVISITNO
 LEFT JOIN patient WITH (NOLOCK) on patient.PRN = billheader.BHPRN
 LEFT JOIN istock WITH (NOLOCK) on istock.ISCODE = ccreditnoteopen.CNOISCODE
 LEFT JOIN iservices WITH (NOLOCK) on iservices.ISCODE = ccreditnoteopen.CNOISCODE
